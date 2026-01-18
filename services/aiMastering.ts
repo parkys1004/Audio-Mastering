@@ -1,9 +1,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MasteringParams } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Fallback to empty string to prevent instant crash on module load if process.env.API_KEY is undefined.
+const apiKey = process.env.API_KEY || '';
+const ai = new GoogleGenAI({ apiKey });
 
 export const generateMasteringParams = async (description: string): Promise<MasteringParams> => {
+  if (!apiKey) {
+    console.error("API Key is missing. Please check your .env file or Vercel environment variables.");
+    throw new Error("API Key configuration error");
+  }
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",

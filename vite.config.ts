@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Polyfill process.env to allow usage of process.env.API_KEY in the browser
-      'process.env': env,
+      // Polyfill process.env for browser. MUST stringify the object to produce a valid JS object literal in the bundle.
+      'process.env': JSON.stringify(env),
     },
     build: {
       chunkSizeWarningLimit: 1600,
