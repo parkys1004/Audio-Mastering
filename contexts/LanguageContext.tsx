@@ -111,6 +111,7 @@ const translations: Translations = {
     
     // Footer
     'footer.rights': '© 2026 방구석 작곡가(5barTV). All rights reserved.',
+    'footer.kmong': 'Buy SUNO E-book',
   },
   ko: {
     // Header
@@ -214,6 +215,7 @@ const translations: Translations = {
 
     // Footer
     'footer.rights': '© 2026 방구석 작곡가(5barTV). All rights reserved.',
+    'footer.kmong': 'SUNO 전자책 구매하기',
   }
 };
 
