@@ -16,11 +16,22 @@ const translations: Translations = {
     'nav.signin': 'Sign In',
     'header.subtitle': '방구석 작곡가',
     
+    // Help Modal
+    'help.title': 'App Overview & Help',
+    'help.intro': 'Mastering Composer is a powerful web-based audio tool designed to make professional mastering accessible. It combines professional presets with a high-fidelity browser-based DSP engine.',
+    'help.feature.2.title': 'Manual Control',
+    'help.feature.2.desc': 'Fine-tune every parameter including 3-band EQ, compressor thresholds, attack/release times, and stereo width.',
+    'help.feature.3.title': 'Local Processing',
+    'help.feature.3.desc': 'Your audio files never leave your device. All signal processing happens locally in your browser using the Web Audio API.',
+    'help.feature.4.title': 'Batch Mode',
+    'help.feature.4.desc': 'Upload multiple WAV files at once to apply consistent mastering settings across an entire album or EP.',
+    'help.close': 'Close',
+
     // Hero
-    'hero.badge': 'AI Audio Engine v1.0',
+    'hero.badge': 'Web Audio Engine v1.0',
     'hero.title.p1': 'Professional Audio Mastering',
     'hero.title.p2': 'Reimagined',
-    'hero.subtitle': 'Elevate your tracks with Gemini AI analysis and high-fidelity DSP processing. Drag, drop, and master instantly.',
+    'hero.subtitle': 'Elevate your tracks with high-fidelity DSP processing. Drag, drop, and master instantly with zero latency.',
     
     // Uploader
     'upload.idle': 'Upload Audio Files',
@@ -60,12 +71,6 @@ const translations: Translations = {
     'batch.failed': 'Failed',
     'batch.empty': 'Empty Queue',
     'batch.files': 'FILES',
-    
-    // AI Prompt
-    'ai.title': 'AI Mastering Assistant',
-    'ai.placeholder': "Describe your desired sound (e.g., 'Warm analog sound with punchy drums')",
-    'ai.generate': 'Generate',
-    'ai.processing': 'Processing',
     
     // Presets
     'presets.title': 'Quick Presets',
@@ -114,11 +119,22 @@ const translations: Translations = {
     'nav.signin': '로그인',
     'header.subtitle': '방구석 작곡가',
 
+    // Help Modal
+    'help.title': '앱 개요 및 도움말',
+    'help.intro': '방구석 작곡가(Mastering Composer)는 전문적인 마스터링을 누구나 쉽게 이용할 수 있도록 설계된 강력한 웹 기반 오디오 도구입니다. 전문적인 프리셋과 고성능 웹 DSP 엔진을 결합했습니다.',
+    'help.feature.2.title': '정밀 수동 제어',
+    'help.feature.2.desc': '3밴드 EQ, 컴프레서의 Threshold/Ratio/Attack/Release, 스테레오 너비 등 모든 파라미터를 사용자가 직접 미세 조정할 수 있습니다.',
+    'help.feature.3.title': '로컬 프로세싱',
+    'help.feature.3.desc': '오디오 파일은 서버로 전송되지 않습니다. 모든 신호 처리는 브라우저의 Web Audio API를 통해 로컬에서 이루어집니다.',
+    'help.feature.4.title': '일괄 처리(Batch) 모드',
+    'help.feature.4.desc': '여러 개의 WAV 파일을 한 번에 업로드하여 앨범이나 EP 전체에 일관된 마스터링 설정을 적용할 수 있습니다.',
+    'help.close': '닫기',
+
     // Hero
-    'hero.badge': 'AI 오디오 엔진 v1.0',
+    'hero.badge': 'Web Audio Engine v1.0',
     'hero.title.p1': '프로페셔널 오디오 마스터링',
     'hero.title.p2': '의 혁신',
-    'hero.subtitle': 'Gemini AI 분석과 고해상도 DSP 프로세싱으로 당신의 트랙을 완성하세요. 드래그 앤 드롭으로 즉시 마스터링됩니다.',
+    'hero.subtitle': '고해상도 DSP 프로세싱으로 당신의 트랙을 완성하세요. 드래그 앤 드롭으로 지연 시간 없이 즉시 마스터링됩니다.',
 
     // Uploader
     'upload.idle': '오디오 파일 업로드',
@@ -158,12 +174,6 @@ const translations: Translations = {
     'batch.failed': '실패',
     'batch.empty': '대기열 비어있음',
     'batch.files': '개 파일',
-
-    // AI Prompt
-    'ai.title': 'AI 마스터링 어시스턴트',
-    'ai.placeholder': "원하는 사운드를 설명하세요 (예: '따뜻한 아날로그 사운드와 단단한 드럼')",
-    'ai.generate': '생성하기',
-    'ai.processing': '처리 중',
 
     // Presets
     'presets.title': '빠른 프리셋',

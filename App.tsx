@@ -6,12 +6,10 @@ import FileUploader from './components/FileUploader';
 import AudioVisualizer from './components/AudioVisualizer';
 import ControlPanel from './components/ControlPanel';
 import Presets from './components/Presets';
-import AIPrompt from './components/AIPrompt';
 import BatchQueue from './components/BatchQueue';
 import { AppStatus, AudioFileState, MasteringParams, BatchItem } from './types';
 import { XMarkIcon, MusicNoteIcon } from './components/Icons';
 import { processAudio } from './services/audioEngine';
-import { generateMasteringParams } from './services/aiMastering';
 import { useLanguage } from './contexts/LanguageContext';
 
 const DEFAULT_PARAMS: MasteringParams = {
@@ -41,7 +39,6 @@ const App: React.FC = () => {
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const [params, setParams] = useState<MasteringParams>(DEFAULT_PARAMS);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
@@ -97,20 +94,6 @@ const App: React.FC = () => {
     setBatchQueue(newQueue);
     if (newQueue.length === 0) {
       setStatus(AppStatus.IDLE);
-    }
-  };
-
-  const handleAIGeneration = async (prompt: string) => {
-    try {
-      setIsAiLoading(true);
-      setActivePresetId(null); // Clear preset selection as AI overrides it
-      const newParams = await generateMasteringParams(prompt);
-      setParams(newParams);
-    } catch (error) {
-      console.error(error);
-      alert("AI 설정을 불러오는 데 실패했습니다. 다시 시도해 주세요.");
-    } finally {
-      setIsAiLoading(false);
     }
   };
 
@@ -338,7 +321,7 @@ const App: React.FC = () => {
                     <div className="flex gap-4">
                       <button 
                         onClick={handleReset}
-                        disabled={isProcessing || isAiLoading}
+                        disabled={isProcessing}
                         className="flex-1 py-4 px-6 rounded-xl glass-button font-semibold text-gray-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {t('btn.change_file')}
@@ -347,7 +330,7 @@ const App: React.FC = () => {
                       {status !== AppStatus.COMPLETED ? (
                         <button 
                           onClick={handleSingleMastering}
-                          disabled={isProcessing || isAiLoading}
+                          disabled={isProcessing}
                           className="flex-[2] py-4 px-6 rounded-xl bg-gradient-to-r from-primary-600 to-purple-600 font-bold text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:scale-[1.01] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border border-white/10"
                         >
                           <span className="uppercase tracking-wider text-sm">{t('btn.process')}</span>
@@ -359,7 +342,7 @@ const App: React.FC = () => {
                         <div className="flex-[2] flex gap-3">
                            <button
                               onClick={handleSingleMastering}
-                              disabled={isProcessing || isAiLoading}
+                              disabled={isProcessing}
                               className="flex-1 py-4 px-4 rounded-xl glass-button font-semibold text-gray-300 hover:text-white flex items-center justify-center gap-2"
                             >
                               {t('btn.reprocess')}
@@ -392,7 +375,7 @@ const App: React.FC = () => {
                      <div className="flex gap-4 mt-6">
                         <button 
                           onClick={handleReset}
-                          disabled={isProcessing || isAiLoading}
+                          disabled={isProcessing}
                           className="flex-1 py-4 px-6 rounded-xl glass-button font-semibold text-gray-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {t('btn.cancel')}
@@ -401,7 +384,7 @@ const App: React.FC = () => {
                         {!isBatchComplete ? (
                           <button 
                             onClick={handleBatchProcessing}
-                            disabled={isProcessing || isAiLoading || batchQueue.length === 0}
+                            disabled={isProcessing || batchQueue.length === 0}
                             className="flex-[2] py-4 px-6 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 font-bold text-white shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:shadow-[0_0_30px_rgba(8,145,178,0.6)] hover:scale-[1.01] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border border-white/10"
                           >
                             <span className="uppercase tracking-wider text-sm">{t('btn.run_batch')}</span>
@@ -424,23 +407,17 @@ const App: React.FC = () => {
                   </>
                 )}
 
-                {/* Shared AI & Control Panel */}
-                <AIPrompt 
-                  onGenerate={handleAIGeneration} 
-                  isLoading={isAiLoading} 
-                  disabled={isProcessing}
-                />
-
+                {/* Control Panel (Shared) */}
                 <Presets 
                   onSelect={handlePresetSelect} 
                   activePresetId={activePresetId}
-                  disabled={isProcessing || isAiLoading} 
+                  disabled={isProcessing} 
                 />
 
                 <ControlPanel 
                   params={params} 
                   onChange={setParams} 
-                  disabled={isProcessing || isAiLoading}
+                  disabled={isProcessing}
                 />
 
               </div>
