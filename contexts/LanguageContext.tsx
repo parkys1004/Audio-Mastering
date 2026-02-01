@@ -116,6 +116,7 @@ const translations: Translations = {
     // Visualizer
     'visualizer.fx_on': 'MONITOR FX ON',
     'visualizer.fx_off': 'MONITOR FX OFF',
+    'visualizer.reset': 'Reset Playback',
   },
   ko: {
     // Header
@@ -224,6 +225,7 @@ const translations: Translations = {
     // Visualizer
     'visualizer.fx_on': '실시간 FX 켜짐',
     'visualizer.fx_off': '실시간 FX 꺼짐',
+    'visualizer.reset': '재생 초기화',
   }
 };
 

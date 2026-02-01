@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PlayIcon, PauseIcon } from './Icons';
+import { PlayIcon, PauseIcon, ArrowPathIcon } from './Icons';
 import { MasteringParams } from '../types';
 import { createMasteringGraph, AudioGraph } from '../services/audioEngine';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -238,6 +238,13 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     setCurrentTime(newTime);
   };
 
+  const handleResetPlayback = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+    }
+  };
+
   const formatTime = (time: number) => {
     const min = Math.floor(time / 60);
     const sec = Math.floor(time % 60);
@@ -302,7 +309,17 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-4 px-1">
+      <div className="flex items-center gap-3 px-1">
+        
+        {/* Reset Button */}
+        <button 
+          onClick={handleResetPlayback}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors border ${variant === 'default' ? 'bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border-gray-600' : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-500 hover:text-gray-300 border-gray-700/50'}`}
+          title={t('visualizer.reset')}
+        >
+          <ArrowPathIcon className="w-4 h-4" />
+        </button>
+
         <button 
           onClick={togglePlay}
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors border ${variant === 'default' ? 'bg-gray-800 hover:bg-gray-700 text-white border-gray-600' : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-400 border-gray-700/50'}`}
