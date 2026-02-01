@@ -57,6 +57,130 @@ function bufferToWav(buffer: AudioBuffer, len: number): Blob {
   return new Blob([bufferArray], { type: 'audio/wav' });
 }
 
+export interface AudioGraph {
+  input: AudioNode;
+  output: AudioNode;
+  updateParams: (params: MasteringParams) => void;
+}
+
+/**
+ * Creates the audio processing graph (EQ -> Compressor -> Imager -> Limiter)
+ * Works for both Real-time AudioContext and OfflineAudioContext.
+ */
+export const createMasteringGraph = (ctx: BaseAudioContext, params: MasteringParams): AudioGraph => {
+  // 1. 3-Band EQ
+  // Low Shelf
+  const lowShelf = ctx.createBiquadFilter();
+  lowShelf.type = 'lowshelf';
+  lowShelf.frequency.value = 100;
+  lowShelf.gain.value = params.eq.lowGain;
+
+  // Mid Peaking
+  const midPeak = ctx.createBiquadFilter();
+  midPeak.type = 'peaking';
+  midPeak.frequency.value = 1000;
+  midPeak.Q.value = 1.0;
+  midPeak.gain.value = params.eq.midGain;
+
+  // High Shelf
+  const highShelf = ctx.createBiquadFilter();
+  highShelf.type = 'highshelf';
+  highShelf.frequency.value = 10000;
+  highShelf.gain.value = params.eq.highGain;
+
+  // 2. Compressor (Glue)
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = params.compressor.threshold;
+  compressor.knee.value = 30;
+  compressor.ratio.value = params.compressor.ratio;
+  compressor.attack.value = params.compressor.attack;
+  compressor.release.value = params.compressor.release;
+
+  // 3. Stereo Imager (Mid-Side Processing)
+  // Logic: M = (L+R)*0.5, S = (L-R)*0.5
+  // We apply 0.5 gain to inputs of MS matrix to prevent clipping when summing
+  const msInputGain = ctx.createGain();
+  msInputGain.gain.value = 0.5; // Correction to prevent 6dB boost
+
+  const splitter = ctx.createChannelSplitter(2);
+  const merger = ctx.createChannelMerger(2);
+  
+  // Gain nodes for matrix
+  const midGain = ctx.createGain(); // For M channel
+  const sideGain = ctx.createGain(); // For S channel (Controls Width)
+  sideGain.gain.value = params.stereoWidth;
+
+  // Inverter for MS encoding/decoding
+  const inverter = ctx.createGain();
+  inverter.gain.value = -1;
+
+  // 4. Limiter (Brickwall-ish)
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -0.5; // Ceiling
+  limiter.knee.value = 0.0; // Hard knee
+  limiter.ratio.value = 20.0; // Limiting ratio
+  limiter.attack.value = 0.001; // Fast attack
+  limiter.release.value = 0.1;
+
+  // === Wiring the Graph ===
+  
+  // Chain: Input -> EQ -> Compressor -> Gain Correction -> Splitter
+  lowShelf.connect(midPeak);
+  midPeak.connect(highShelf);
+  highShelf.connect(compressor);
+  compressor.connect(msInputGain);
+  msInputGain.connect(splitter);
+
+  // MS Encoding & Processing
+  // Mid = L + R
+  splitter.connect(midGain, 0); 
+  splitter.connect(midGain, 1);
+  
+  // Side = L - R
+  splitter.connect(sideGain, 0);
+  splitter.connect(inverter, 1);
+  inverter.connect(sideGain);
+
+  // MS Decoding
+  // L = Mid + Side
+  midGain.connect(merger, 0, 0);
+  sideGain.connect(merger, 0, 0);
+  
+  // R = Mid - Side
+  midGain.connect(merger, 0, 1);
+  // We need to invert side again for the Right channel
+  const sideInverterForDecoding = ctx.createGain();
+  sideInverterForDecoding.gain.value = -1;
+  sideGain.connect(sideInverterForDecoding);
+  sideInverterForDecoding.connect(merger, 0, 1);
+
+  // Final Chain: Merger -> Limiter -> Output
+  merger.connect(limiter);
+
+  // Function to update params in real-time
+  const updateParams = (newParams: MasteringParams) => {
+    // EQ
+    lowShelf.gain.setTargetAtTime(newParams.eq.lowGain, ctx.currentTime, 0.1);
+    midPeak.gain.setTargetAtTime(newParams.eq.midGain, ctx.currentTime, 0.1);
+    highShelf.gain.setTargetAtTime(newParams.eq.highGain, ctx.currentTime, 0.1);
+
+    // Compressor
+    compressor.threshold.setTargetAtTime(newParams.compressor.threshold, ctx.currentTime, 0.1);
+    compressor.ratio.setTargetAtTime(newParams.compressor.ratio, ctx.currentTime, 0.1);
+    compressor.attack.setTargetAtTime(newParams.compressor.attack, ctx.currentTime, 0.1);
+    compressor.release.setTargetAtTime(newParams.compressor.release, ctx.currentTime, 0.1);
+
+    // Imager
+    sideGain.gain.setTargetAtTime(newParams.stereoWidth, ctx.currentTime, 0.1);
+  };
+
+  return {
+    input: lowShelf,
+    output: limiter,
+    updateParams
+  };
+};
+
 export const processAudio = async (file: File, params: MasteringParams): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
   const tempCtx = new AudioContext();
@@ -73,108 +197,12 @@ export const processAudio = async (file: File, params: MasteringParams): Promise
   const source = offlineCtx.createBufferSource();
   source.buffer = audioBuffer;
 
-  // 2. 3-Band EQ
-  // Low Shelf
-  const lowShelf = offlineCtx.createBiquadFilter();
-  lowShelf.type = 'lowshelf';
-  lowShelf.frequency.value = 100;
-  lowShelf.gain.value = params.eq.lowGain;
+  // 2. Create Graph
+  const graph = createMasteringGraph(offlineCtx, params);
 
-  // Mid Peaking
-  const midPeak = offlineCtx.createBiquadFilter();
-  midPeak.type = 'peaking';
-  midPeak.frequency.value = 1000;
-  midPeak.Q.value = 1.0;
-  midPeak.gain.value = params.eq.midGain;
-
-  // High Shelf
-  const highShelf = offlineCtx.createBiquadFilter();
-  highShelf.type = 'highshelf';
-  highShelf.frequency.value = 10000;
-  highShelf.gain.value = params.eq.highGain;
-
-  // 3. Compressor (Glue)
-  const compressor = offlineCtx.createDynamicsCompressor();
-  compressor.threshold.value = params.compressor.threshold;
-  compressor.knee.value = 30;
-  compressor.ratio.value = params.compressor.ratio;
-  compressor.attack.value = params.compressor.attack;
-  compressor.release.value = params.compressor.release;
-
-  // 4. Stereo Imager (Mid-Side Processing)
-  // We need to split channels, process M/S, and merge back.
-  // M = (L+R)/2, S = (L-R)/2
-  // We will increase gain on S channel for width.
-  
-  // Note: For simplicity in node graph, we assume stereo input.
-  const splitter = offlineCtx.createChannelSplitter(2);
-  const merger = offlineCtx.createChannelMerger(2);
-  
-  // Gain nodes for matrix
-  const midGain = offlineCtx.createGain(); // For M channel
-  const sideGain = offlineCtx.createGain(); // For S channel (Controls Width)
-  
-  sideGain.gain.value = params.stereoWidth;
-
-  // Matrix Math requires inversion for subtraction
-  const inverter = offlineCtx.createGain();
-  inverter.gain.value = -1;
-
-  // 5. Limiter (Brickwall-ish)
-  const limiter = offlineCtx.createDynamicsCompressor();
-  limiter.threshold.value = -1.0; // Ceiling
-  limiter.knee.value = 0.0; // Hard knee
-  limiter.ratio.value = 20.0; // Limiting ratio
-  limiter.attack.value = 0.001; // Fast attack
-  limiter.release.value = 0.1;
-
-  // === Wiring the Graph ===
-  
-  // Chain: Source -> EQ -> Compressor -> Splitter
-  source.connect(lowShelf);
-  lowShelf.connect(midPeak);
-  midPeak.connect(highShelf);
-  highShelf.connect(compressor);
-  compressor.connect(splitter);
-
-  // MS Matrix Encoding & Processing
-  // Mid = L + R (We rely on summing behavior of connecting multiple outputs to one input)
-  // Side = L - R
-  
-  // Connect L to Mid
-  splitter.connect(midGain, 0); 
-  // Connect R to Mid
-  splitter.connect(midGain, 1);
-  
-  // Connect L to Side
-  splitter.connect(sideGain, 0);
-  // Connect R to Inverter -> Side
-  splitter.connect(inverter, 1);
-  inverter.connect(sideGain);
-
-  // MS Matrix Decoding
-  // L = Mid + Side
-  // R = Mid - Side
-  
-  // To L Out
-  midGain.connect(merger, 0, 0);
-  sideGain.connect(merger, 0, 0);
-  
-  // To R Out
-  midGain.connect(merger, 0, 1);
-  sideGain.connect(merger, 0, 1); // We need to subtract side. Ideally we need another inverter.
-  
-  // Wait, the standard decoding is L = M + S, R = M - S.
-  // So for Right channel, we need to invert Side again.
-  const sideInverterForDecoding = offlineCtx.createGain();
-  sideInverterForDecoding.gain.value = -1;
-  sideGain.connect(sideInverterForDecoding);
-  sideInverterForDecoding.connect(merger, 0, 1);
-
-  // 6. Final Limiter
-  // Connect Merger (Stereo Imager Output) -> Limiter -> Destination
-  merger.connect(limiter);
-  limiter.connect(offlineCtx.destination);
+  // 3. Connect
+  source.connect(graph.input);
+  graph.output.connect(offlineCtx.destination);
 
   // Start Rendering
   source.start(0);

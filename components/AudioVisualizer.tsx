@@ -1,26 +1,38 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PlayIcon, PauseIcon } from './Icons';
+import { MasteringParams } from '../types';
+import { createMasteringGraph, AudioGraph } from '../services/audioEngine';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface AudioVisualizerProps {
   audioUrl: string;
   label?: string;
   variant?: 'default' | 'muted';
+  masteringParams?: MasteringParams | null;
 }
 
 const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ 
   audioUrl, 
   label, 
-  variant = 'default' 
+  variant = 'default',
+  masteringParams
 }) => {
+  const { t } = useLanguage();
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   
+  // Real-time FX State
+  const [isFxEnabled, setIsFxEnabled] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  
+  // Web Audio API refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const graphRef = useRef<AudioGraph | null>(null);
   const animationRef = useRef<number>(0);
 
   // Initialize Audio
@@ -43,24 +55,75 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     };
   }, [audioUrl]);
 
-  // Setup Visualizer
-  const initVisualizer = () => {
-    if (audioContextRef.current) return; // Already initialized
+  // Handle Real-time Params Update
+  useEffect(() => {
+    if (graphRef.current && masteringParams && isFxEnabled) {
+      graphRef.current.updateParams(masteringParams);
+    }
+  }, [masteringParams, isFxEnabled]);
+
+  // Setup Visualizer & Audio Graph
+  const initAudioSystem = () => {
+    if (audioContextRef.current) return;
 
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     const ctx = new AudioContext();
     audioContextRef.current = ctx;
 
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048; // Higher value = more detailed waveform
+    analyser.fftSize = 2048;
     analyserRef.current = analyser;
 
     if (audioRef.current) {
-      // Connect audio element to analyser
       const source = ctx.createMediaElementSource(audioRef.current);
-      source.connect(analyser);
-      analyser.connect(ctx.destination);
       sourceRef.current = source;
+      
+      // Initial Connection (Dry)
+      connectGraph(ctx, source, analyser, false);
+    }
+  };
+
+  const connectGraph = (
+    ctx: AudioContext, 
+    source: MediaElementAudioSourceNode, 
+    analyser: AnalyserNode,
+    enableFx: boolean
+  ) => {
+    // Disconnect everything first
+    try { source.disconnect(); } catch (e) {}
+    if (graphRef.current) {
+      try { graphRef.current.output.disconnect(); } catch (e) {}
+    }
+
+    if (enableFx && masteringParams) {
+      // WET PATH: Source -> FX Graph -> Analyser -> Destination
+      if (!graphRef.current) {
+        graphRef.current = createMasteringGraph(ctx, masteringParams);
+      } else {
+        // Ensure params are up to date when switching on
+        graphRef.current.updateParams(masteringParams);
+      }
+      
+      source.connect(graphRef.current.input);
+      graphRef.current.output.connect(analyser);
+    } else {
+      // DRY PATH: Source -> Analyser -> Destination
+      source.connect(analyser);
+    }
+
+    analyser.connect(ctx.destination);
+  };
+
+  // Toggle FX Handler
+  const toggleFx = async () => {
+    if (!audioContextRef.current) initAudioSystem();
+    if (audioContextRef.current?.state === 'suspended') await audioContextRef.current.resume();
+
+    const newFxState = !isFxEnabled;
+    setIsFxEnabled(newFxState);
+
+    if (audioContextRef.current && sourceRef.current && analyserRef.current) {
+      connectGraph(audioContextRef.current, sourceRef.current, analyserRef.current, newFxState);
     }
   };
 
@@ -80,29 +143,33 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear with a slight fade for trail effect or fully clear
     ctx.clearRect(0, 0, width, height);
-
     ctx.lineWidth = 2;
     
-    // Gradient Stroke based on variant
     const gradient = ctx.createLinearGradient(0, 0, width, 0);
     
     if (variant === 'default') {
-      gradient.addColorStop(0, '#818cf8'); // primary-400
-      gradient.addColorStop(0.5, '#c084fc'); // purple-400
-      gradient.addColorStop(1, '#22d3ee'); // cyan-400
+      // Change color based on FX state
+      if (isFxEnabled) {
+        gradient.addColorStop(0, '#f472b6'); // pink-400
+        gradient.addColorStop(0.5, '#fb7185'); // rose-400
+        gradient.addColorStop(1, '#facc15'); // yellow-400
+        ctx.shadowColor = 'rgba(244, 114, 182, 0.5)';
+      } else {
+        gradient.addColorStop(0, '#818cf8'); // primary-400
+        gradient.addColorStop(0.5, '#c084fc'); // purple-400
+        gradient.addColorStop(1, '#22d3ee'); // cyan-400
+        ctx.shadowColor = 'rgba(99, 102, 241, 0.5)';
+      }
       ctx.shadowBlur = 8;
-      ctx.shadowColor = 'rgba(99, 102, 241, 0.5)';
     } else {
-      gradient.addColorStop(0, '#4b5563'); // gray-600
-      gradient.addColorStop(1, '#9ca3af'); // gray-400
+      gradient.addColorStop(0, '#4b5563');
+      gradient.addColorStop(1, '#9ca3af');
       ctx.shadowBlur = 0;
       ctx.shadowColor = 'transparent';
     }
     
     ctx.strokeStyle = gradient;
-
     ctx.beginPath();
 
     const sliceWidth = width * 1.0 / bufferLength;
@@ -129,7 +196,6 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
   useEffect(() => {
     if (isPlaying) {
-      // Start drawing loop
       draw();
     } else {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
@@ -137,17 +203,15 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [isPlaying]);
+  }, [isPlaying, isFxEnabled]);
 
   const togglePlay = async () => {
     if (!audioRef.current) return;
 
-    // Initialize Context on first user interaction
     if (!audioContextRef.current) {
-      initVisualizer();
+      initAudioSystem();
     }
 
-    // Resume context if suspended (browser policy)
     if (audioContextRef.current?.state === 'suspended') {
       await audioContextRef.current.resume();
     }
@@ -168,35 +232,47 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
   return (
     <div className="w-full flex flex-col gap-3">
-      {/* Hidden Audio Element */}
       <audio ref={audioRef} src={audioUrl} crossOrigin="anonymous" />
 
-      {/* Label Badge */}
-      {label && (
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold font-mono uppercase tracking-widest px-2 py-0.5 rounded-sm ${variant === 'default' ? 'bg-primary-500/20 text-primary-300 border border-primary-500/30' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>
-            {label}
-          </span>
-        </div>
-      )}
+      {/* Label & Controls Row */}
+      <div className="flex items-center justify-between">
+        {label && (
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-bold font-mono uppercase tracking-widest px-2 py-0.5 rounded-sm ${variant === 'default' ? 'bg-primary-500/20 text-primary-300 border border-primary-500/30' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>
+              {label}
+            </span>
+          </div>
+        )}
+
+        {/* Real-time FX Toggle (Only if params are provided and variant is default) */}
+        {masteringParams && variant === 'default' && (
+          <button
+            onClick={toggleFx}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all duration-300
+              ${isFxEnabled 
+                ? 'bg-gradient-to-r from-rose-600 to-pink-500 text-white border border-rose-400/50 shadow-[0_0_20px_rgba(244,63,94,0.4)] scale-105' 
+                : 'bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700 hover:border-gray-500 hover:text-gray-200'
+              }
+            `}
+          >
+            <span className={`w-2 h-2 rounded-full transition-colors ${isFxEnabled ? 'bg-white animate-pulse shadow-[0_0_8px_white]' : 'bg-gray-600'}`}></span>
+            {isFxEnabled ? t('visualizer.fx_on') : t('visualizer.fx_off')}
+          </button>
+        )}
+      </div>
 
       {/* Visualizer Area */}
       <div className={`relative w-full h-32 rounded-xl border overflow-hidden group transition-all duration-500 ${variant === 'default' ? 'bg-gray-950/60 border-gray-700/50 shadow-inner' : 'bg-gray-900/30 border-gray-800/50 grayscale opacity-70'}`}>
-        
-        {/* Canvas */}
         <canvas 
           ref={canvasRef} 
           width={600} 
           height={128}
           className="w-full h-full relative z-10"
         />
-
-        {/* Grid Background (DAW Style) */}
         <div className="absolute inset-0 opacity-10 pointer-events-none z-0" 
              style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
         </div>
-
-        {/* Play Overlay */}
         {!isPlaying && currentTime === 0 && (
            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] z-20">
              <button 
@@ -215,18 +291,13 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           onClick={togglePlay}
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors border ${variant === 'default' ? 'bg-gray-800 hover:bg-gray-700 text-white border-gray-600' : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-400 border-gray-700/50'}`}
         >
-          {isPlaying ? (
-            <PauseIcon className="w-4 h-4" />
-          ) : (
-            <PlayIcon className="w-4 h-4 ml-0.5" />
-          )}
+          {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
         </button>
 
-        {/* Progress Bar (Visual only for now, can be made interactive) */}
         <div className="flex-1 flex flex-col gap-1.5">
            <div className="h-1.5 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800/50">
              <div 
-               className={`h-full relative ${variant === 'default' ? 'bg-gradient-to-r from-primary-500 to-cyan-400 shadow-[0_0_8px_rgba(99,102,241,0.6)]' : 'bg-gray-600'}`}
+               className={`h-full relative transition-colors duration-500 ${variant === 'default' ? (isFxEnabled ? 'bg-gradient-to-r from-rose-500 to-yellow-500' : 'bg-gradient-to-r from-primary-500 to-cyan-400') : 'bg-gray-600'}`}
                style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
              >
              </div>

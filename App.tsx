@@ -303,6 +303,7 @@ const App: React.FC = () => {
                           audioUrl={originalFile.url}
                           label={masteredFile ? t('label.original') : t('label.preview')}
                           variant={masteredFile ? "muted" : "default"}
+                          masteringParams={params} // Pass current params for real-time preview
                         />
                       )}
                       {masteredFile?.url && (
@@ -313,6 +314,7 @@ const App: React.FC = () => {
                             audioUrl={masteredFile.url}
                             label={t('label.master')}
                             variant="default"
+                            // Mastered file is already processed, so no params needed
                           />
                         </div>
                       )}
