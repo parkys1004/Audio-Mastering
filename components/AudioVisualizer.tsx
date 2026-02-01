@@ -27,6 +27,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
   
   // Web Audio API refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -224,11 +225,26 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     setIsPlaying(!isPlaying);
   };
 
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !audioRef.current || duration === 0) return;
+    
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const width = rect.width;
+    const percentage = Math.min(Math.max(x / width, 0), 1);
+    
+    const newTime = percentage * duration;
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
   const formatTime = (time: number) => {
     const min = Math.floor(time / 60);
     const sec = Math.floor(time % 60);
     return `${min}:${sec.toString().padStart(2, '0')}`;
   };
+
+  const progressPercentage = (currentTime / (duration || 1)) * 100;
 
   return (
     <div className="w-full flex flex-col gap-3">
@@ -294,15 +310,31 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
         </button>
 
-        <div className="flex-1 flex flex-col gap-1.5">
-           <div className="h-1.5 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800/50">
-             <div 
-               className={`h-full relative transition-colors duration-500 ${variant === 'default' ? (isFxEnabled ? 'bg-gradient-to-r from-rose-500 to-yellow-500' : 'bg-gradient-to-r from-primary-500 to-cyan-400') : 'bg-gray-600'}`}
-               style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-             >
+        <div className="flex-1 flex flex-col gap-1.5 group/progress">
+           {/* Interactive Progress Bar */}
+           <div 
+             ref={progressBarRef}
+             onClick={handleSeek}
+             className="relative h-4 w-full flex items-center cursor-pointer"
+           >
+             {/* Track Background */}
+             <div className="absolute inset-0 m-auto h-1.5 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800/50">
+               {/* Progress Fill */}
+               <div 
+                 className={`h-full relative transition-colors duration-500 ${variant === 'default' ? (isFxEnabled ? 'bg-gradient-to-r from-rose-500 to-yellow-500' : 'bg-gradient-to-r from-primary-500 to-cyan-400') : 'bg-gray-600'}`}
+                 style={{ width: `${progressPercentage}%` }}
+               >
+               </div>
              </div>
+             
+             {/* Thumb Indicator (Visible on Hover) */}
+             <div 
+               className={`absolute w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none transform -translate-x-1/2`}
+               style={{ left: `${progressPercentage}%` }}
+             />
            </div>
-           <div className="flex justify-between text-[10px] text-gray-500 font-mono tracking-tight">
+
+           <div className="flex justify-between text-[10px] text-gray-500 font-mono tracking-tight -mt-1">
              <span>{formatTime(currentTime)}</span>
              <span>{formatTime(duration)}</span>
            </div>
