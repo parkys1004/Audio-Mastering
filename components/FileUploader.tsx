@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { UploadIcon, FileIcon } from './Icons';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ACCEPT_ATTRIBUTE, isSupportedAudio } from '../services/audioFormats';
 
 interface FileUploaderProps {
   onFileSelect: (files: File[]) => void;
@@ -17,7 +18,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelect }) => {
     let hasInvalid = false;
 
     Array.from(fileList).forEach(file => {
-      if (file.type === 'audio/wav' || file.type === 'audio/x-wav' || file.name.endsWith('.wav')) {
+      if (isSupportedAudio(file)) {
         validFiles.push(file);
       } else {
         hasInvalid = true;
@@ -87,7 +88,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelect }) => {
           type="file"
           ref={fileInputRef}
           onChange={onFileInputChange}
-          accept=".wav"
+          accept={ACCEPT_ATTRIBUTE}
           className="hidden"
           multiple
         />

@@ -15,6 +15,7 @@ import { XMarkIcon, MusicNoteIcon } from './components/Icons';
 import { processAudio, analyzeFile } from './services/audioEngine';
 import { generateMasteringParams, AiError } from './services/aiMastering';
 import { getApiKey } from './services/apiKey';
+import { masteredName, formatLabel } from './services/audioFormats';
 import { useLanguage } from './contexts/LanguageContext';
 
 const DEFAULT_PARAMS: MasteringParams = {
@@ -168,7 +169,7 @@ const App: React.FC = () => {
       const masteredUrl = URL.createObjectURL(processedBlob);
       const newMasteredFile: AudioFileState = {
         file: null,
-        name: `mastered_${originalFile.name}`,
+        name: masteredName(originalFile.name),
         size: processedBlob.size,
         type: 'audio/wav',
         url: masteredUrl
@@ -181,7 +182,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Mastering failed:", error);
       setStatus(AppStatus.ERROR);
-      alert("오디오 처리 중 오류가 발생했습니다.");
+      alert(error instanceof Error && error.message === 'DECODE_FAILED' ? t('error.decode') : t('error.process'));
     } finally {
       setIsProcessing(false);
     }
@@ -225,7 +226,7 @@ const App: React.FC = () => {
 
     batchQueue.forEach(item => {
       if (item.status === 'COMPLETED' && item.processedBlob) {
-        zip.file(`mastered_${item.file.name}`, item.processedBlob);
+        zip.file(masteredName(item.file.name), item.processedBlob);
         count++;
       }
     });
@@ -338,7 +339,7 @@ const App: React.FC = () => {
                       <p className="text-xs text-gray-400 font-mono mt-1">
                         {status === AppStatus.BATCH_MODE || batchQueue.length > 0 
                           ? `${batchQueue.length} ${t('status.items_queued')}` 
-                          : `${originalFile && formatFileSize(originalFile.size)} • WAV • 44.1kHz`
+                          : `${originalFile && formatFileSize(originalFile.size)} • ${originalFile?.file ? formatLabel(originalFile.file) : 'AUDIO'} → WAV`
                         }
                       </p>
                     </div>

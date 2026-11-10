@@ -24,7 +24,7 @@ const translations: Translations = {
     'help.feature.3.title': 'Local Processing',
     'help.feature.3.desc': 'Your audio files never leave your device. All signal processing happens locally in your browser using the Web Audio API.',
     'help.feature.4.title': 'Batch Mode',
-    'help.feature.4.desc': 'Upload multiple WAV files at once to apply consistent mastering settings across an entire album or EP.',
+    'help.feature.4.desc': 'Upload multiple audio files at once to apply consistent mastering settings across an entire album or EP.',
     'help.close': 'Close',
 
     // Hero
@@ -36,10 +36,12 @@ const translations: Translations = {
     // Uploader
     'upload.idle': 'Upload Audio Files',
     'upload.active': "Drop it like it's hot",
-    'upload.desc': 'Drag & Drop WAV files here or',
+    'upload.desc': 'Drag & Drop audio files here or',
     'upload.browse': 'browse your computer',
-    'upload.support': 'SUPPORT: WAV (PCM)',
-    'upload.error': 'Some files were excluded. Only WAV format is supported.',
+    'upload.support': 'SUPPORT: WAV, MP3, FLAC, OGG, M4A/AAC (output: WAV)',
+    'upload.error': 'Some files were excluded. Supported: WAV, MP3, FLAC, OGG, M4A/AAC.',
+    'error.decode': 'This file could not be decoded. It may be corrupted or use a codec your browser does not support.',
+    'error.process': 'An error occurred while processing the audio.',
     
     // Status
     'status.processing_batch': 'PROCESSING BATCH...',
@@ -176,7 +178,7 @@ const translations: Translations = {
     'help.feature.3.title': '로컬 프로세싱',
     'help.feature.3.desc': '오디오 파일은 서버로 전송되지 않습니다. 모든 신호 처리는 브라우저의 Web Audio API를 통해 로컬에서 이루어집니다.',
     'help.feature.4.title': '일괄 처리(Batch) 모드',
-    'help.feature.4.desc': '여러 개의 WAV 파일을 한 번에 업로드하여 앨범이나 EP 전체에 일관된 마스터링 설정을 적용할 수 있습니다.',
+    'help.feature.4.desc': '여러 개의 오디오 파일을 한 번에 업로드하여 앨범이나 EP 전체에 일관된 마스터링 설정을 적용할 수 있습니다.',
     'help.close': '닫기',
 
     // Hero
@@ -188,10 +190,12 @@ const translations: Translations = {
     // Uploader
     'upload.idle': '오디오 파일 업로드',
     'upload.active': '파일을 놓아주세요',
-    'upload.desc': 'WAV 파일을 여기에 드래그하거나',
+    'upload.desc': '오디오 파일을 여기에 드래그하거나',
     'upload.browse': '내 컴퓨터에서 찾아보기',
-    'upload.support': '지원 형식: WAV (PCM)',
-    'upload.error': '일부 파일이 제외되었습니다. WAV 형식만 지원됩니다.',
+    'upload.support': '지원 형식: WAV, MP3, FLAC, OGG, M4A/AAC (출력: WAV)',
+    'upload.error': '일부 파일이 제외되었습니다. 지원 형식: WAV, MP3, FLAC, OGG, M4A/AAC',
+    'error.decode': '이 파일을 디코딩할 수 없습니다. 파일이 손상되었거나 브라우저가 지원하지 않는 코덱일 수 있습니다.',
+    'error.process': '오디오 처리 중 오류가 발생했습니다.',
 
     // Status
     'status.processing_batch': '일괄 처리 중...',

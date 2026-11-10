@@ -1,5 +1,6 @@
 import { BitDepth, DEFAULT_OUTPUT, MasteringParams, MasteringResult, OutputParams } from '../types';
 import { measureLoudness } from './loudness';
+import { detectSampleRate } from './audioFormats';
 
 // ---------------------------------------------------------------------------
 // Look-ahead brickwall limiter (AudioWorklet)
@@ -323,17 +324,15 @@ export const createMasteringGraph = async (
 // ---------------------------------------------------------------------------
 // Offline rendering
 // ---------------------------------------------------------------------------
-const readWavSampleRate = (arrayBuffer: ArrayBuffer): number => {
+const decodeFile = async (file: File): Promise<AudioBuffer> => {
+  const arrayBuffer = await file.arrayBuffer();
+  // Decode at the file's own sample rate (no resampling to the device rate)
+  const ctx = new OfflineAudioContext(2, 1, detectSampleRate(arrayBuffer));
   try {
-    const view = new DataView(arrayBuffer);
-    if (view.byteLength > 28 && view.getUint32(0, false) === 0x52494646) {
-      const sr = view.getUint32(24, true);
-      if (sr >= 8000 && sr <= 384000) return sr;
-    }
+    return await ctx.decodeAudioData(arrayBuffer);
   } catch {
-    /* ignore */
+    throw new Error('DECODE_FAILED');
   }
-  return 44100;
 };
 
 const renderMaster = async (
@@ -360,12 +359,7 @@ const LUFS_TOLERANCE = 0.3;
 const LUFS_MAX_PASSES = 4;
 
 export const processAudio = async (file: File, params: MasteringParams): Promise<MasteringResult> => {
-  const arrayBuffer = await file.arrayBuffer();
-  const sampleRate = readWavSampleRate(arrayBuffer);
-
-  // Decode at the file's own sample rate (no resampling to the device rate)
-  const decodeCtx = new OfflineAudioContext(2, 1, sampleRate);
-  const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+  const audioBuffer = await decodeFile(file);
 
   const out: OutputParams = params.output ?? DEFAULT_OUTPUT;
   const inputStats = await measureLoudness(audioBuffer);
@@ -392,8 +386,6 @@ export const processAudio = async (file: File, params: MasteringParams): Promise
 
 /** Quick analysis of a file (used for AI context and the input meter). */
 export const analyzeFile = async (file: File) => {
-  const arrayBuffer = await file.arrayBuffer();
-  const ctx = new OfflineAudioContext(2, 1, readWavSampleRate(arrayBuffer));
-  const buffer = await ctx.decodeAudioData(arrayBuffer);
+  const buffer = await decodeFile(file);
   return measureLoudness(buffer);
 };
