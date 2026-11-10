@@ -10,7 +10,7 @@ const Footer: React.FC = () => {
         
         {/* Kmong Button */}
         <a 
-          href="https://kmong.com/gig/730531" 
+          href="https://bang-guseog.com" 
           target="_blank" 
           rel="noopener noreferrer"
           className="

@@ -111,7 +111,7 @@ const translations: Translations = {
     
     // Footer
     'footer.rights': '© 2026 방구석 작곡가(5barTV). All rights reserved.',
-    'footer.kmong': 'Buy SUNO E-book',
+    'footer.kmong': '방구석AI',
 
     // Visualizer
     'visualizer.fx_on': 'MONITOR FX ON',
@@ -220,7 +220,7 @@ const translations: Translations = {
 
     // Footer
     'footer.rights': '© 2026 방구석 작곡가(5barTV). All rights reserved.',
-    'footer.kmong': 'SUNO 전자책 구매하기',
+    'footer.kmong': '방구석AI',
 
     // Visualizer
     'visualizer.fx_on': '실시간 FX 켜짐',
