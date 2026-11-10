@@ -7,9 +7,14 @@ import AudioVisualizer from './components/AudioVisualizer';
 import ControlPanel from './components/ControlPanel';
 import Presets from './components/Presets';
 import BatchQueue from './components/BatchQueue';
-import { AppStatus, AudioFileState, MasteringParams, BatchItem } from './types';
+import AIPrompt from './components/AIPrompt';
+import ApiKeyModal from './components/ApiKeyModal';
+import LoudnessPanel from './components/LoudnessPanel';
+import { AppStatus, AudioFileState, MasteringParams, BatchItem, MasteringResult, LoudnessStats, DEFAULT_OUTPUT } from './types';
 import { XMarkIcon, MusicNoteIcon } from './components/Icons';
-import { processAudio } from './services/audioEngine';
+import { processAudio, analyzeFile } from './services/audioEngine';
+import { generateMasteringParams, AiError } from './services/aiMastering';
+import { getApiKey } from './services/apiKey';
 import { useLanguage } from './contexts/LanguageContext';
 
 const DEFAULT_PARAMS: MasteringParams = {
@@ -25,6 +30,8 @@ const DEFAULT_PARAMS: MasteringParams = {
     release: 0.25,
   },
   stereoWidth: 1.2,
+  lowCut: 20,
+  output: DEFAULT_OUTPUT,
 };
 
 const App: React.FC = () => {
@@ -42,6 +49,14 @@ const App: React.FC = () => {
   const [params, setParams] = useState<MasteringParams>(DEFAULT_PARAMS);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
+  // Loudness analysis / A-B state
+  const [inputStats, setInputStats] = useState<LoudnessStats | null>(null);
+  const [masterResult, setMasterResult] = useState<MasteringResult | null>(null);
+  const [matchLoudness, setMatchLoudness] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [hasKey, setHasKey] = useState(() => !!getApiKey());
+
   const handleFileSelect = (files: File[]) => {
     if (files.length === 0) return;
 
@@ -58,6 +73,10 @@ const App: React.FC = () => {
       
       setOriginalFile(newState);
       setMasteredFile(null);
+      setMasterResult(null);
+      setInputStats(null);
+      setMatchLoudness(false);
+      analyzeFile(file).then(setInputStats).catch((e) => console.warn('Analysis failed', e));
       setBatchQueue([]); // Clear batch
       setStatus(AppStatus.FILE_LOADED);
     } else {
@@ -87,6 +106,9 @@ const App: React.FC = () => {
     setIsProcessing(false);
     setParams(DEFAULT_PARAMS);
     setActivePresetId(null);
+    setMasterResult(null);
+    setInputStats(null);
+    setMatchLoudness(false);
   };
 
   const removeFromBatch = (id: string) => {
@@ -98,8 +120,37 @@ const App: React.FC = () => {
   };
 
   const handlePresetSelect = (id: string, newParams: MasteringParams) => {
-    setParams(newParams);
+    // Keep the user's output settings (gain/ceiling/target/bit depth) when switching presets
+    setParams({ ...newParams, output: params.output ?? DEFAULT_OUTPUT });
     setActivePresetId(id);
+  };
+
+  const handleAIGenerate = async (description: string) => {
+    if (!getApiKey()) {
+      setKeyModalOpen(true);
+      return;
+    }
+    try {
+      setAiLoading(true);
+      const generated = await generateMasteringParams(description, params, inputStats);
+      setParams(generated);
+      setActivePresetId(null);
+    } catch (error) {
+      console.error('AI generation failed:', error);
+      const code = error instanceof AiError ? error.code : 'FAILED';
+      if (code === 'NO_API_KEY' || code === 'INVALID_KEY') {
+        alert(t('ai.err.invalid'));
+        setKeyModalOpen(true);
+      } else if (code === 'RATE_LIMIT') {
+        alert(t('ai.err.rate'));
+      } else if (code === 'NETWORK') {
+        alert(t('ai.err.network'));
+      } else {
+        alert(t('ai.error'));
+      }
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleSingleMastering = async () => {
@@ -109,7 +160,10 @@ const App: React.FC = () => {
       setIsProcessing(true);
       setStatus(AppStatus.PROCESSING);
       
-      const processedBlob = await processAudio(originalFile.file, params);
+      const result = await processAudio(originalFile.file, params);
+      const processedBlob = result.blob;
+      setMasterResult(result);
+      setInputStats(result.input);
       
       const masteredUrl = URL.createObjectURL(processedBlob);
       const newMasteredFile: AudioFileState = {
@@ -147,11 +201,11 @@ const App: React.FC = () => {
       setBatchQueue([...processedQueue]);
 
       try {
-        const blob = await processAudio(processedQueue[i].file, params);
+        const result = await processAudio(processedQueue[i].file, params);
         processedQueue[i] = { 
           ...processedQueue[i], 
           status: 'COMPLETED', 
-          processedBlob: blob 
+          processedBlob: result.blob 
         };
       } catch (e) {
         console.error(`Error processing file ${processedQueue[i].file.name}`, e);
@@ -204,6 +258,12 @@ const App: React.FC = () => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
+
+  // Loudness-matched A/B: attenuate the master down to the original's loudness
+  const masterTrimDb =
+    matchLoudness && masterResult && Number.isFinite(masterResult.input.lufs) && Number.isFinite(masterResult.output.lufs)
+      ? Math.min(0, masterResult.input.lufs - masterResult.output.lufs)
+      : 0;
 
   // Condition to check if all batch items are processed
   const isBatchComplete = batchQueue.length > 0 && batchQueue.every(i => i.status === 'COMPLETED' || i.status === 'ERROR');
@@ -314,11 +374,20 @@ const App: React.FC = () => {
                             audioUrl={masteredFile.url}
                             label={t('label.master')}
                             variant="default"
+                            volumeTrimDb={masterTrimDb}
                             // Mastered file is already processed, so no params needed
                           />
                         </div>
                       )}
                     </div>
+
+                    <LoudnessPanel
+                      input={masterResult?.input ?? inputStats}
+                      output={masterResult?.output}
+                      appliedGain={masterResult?.appliedGain}
+                      matchEnabled={matchLoudness}
+                      onToggleMatch={setMatchLoudness}
+                    />
 
                     <div className="flex gap-4">
                       <button 
@@ -416,6 +485,14 @@ const App: React.FC = () => {
                   disabled={isProcessing} 
                 />
 
+                <AIPrompt
+                  onGenerate={handleAIGenerate}
+                  isLoading={aiLoading}
+                  disabled={isProcessing}
+                  hasKey={hasKey}
+                  onOpenKeySettings={() => setKeyModalOpen(true)}
+                />
+
                 <ControlPanel 
                   params={params} 
                   onChange={setParams} 
@@ -429,6 +506,10 @@ const App: React.FC = () => {
       </main>
 
       <Footer />
+
+      {keyModalOpen && (
+        <ApiKeyModal onClose={() => setKeyModalOpen(false)} onChange={setHasKey} />
+      )}
     </div>
   );
 };

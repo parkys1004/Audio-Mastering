@@ -9,13 +9,16 @@ interface AudioVisualizerProps {
   label?: string;
   variant?: 'default' | 'muted';
   masteringParams?: MasteringParams | null;
+  /** Gain trim in dB applied after the chain (used for loudness-matched A/B) */
+  volumeTrimDb?: number;
 }
 
 const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ 
   audioUrl, 
   label, 
   variant = 'default',
-  masteringParams
+  masteringParams,
+  volumeTrimDb = 0
 }) => {
   const { t } = useLanguage();
   const [isPlaying, setIsPlaying] = useState(false);
@@ -34,6 +37,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const graphRef = useRef<AudioGraph | null>(null);
+  const trimRef = useRef<GainNode | null>(null);
+  const fxRequestRef = useRef(0);
   const animationRef = useRef<number>(0);
 
   // Initialize Audio
@@ -63,6 +68,22 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     }
   }, [masteringParams, isFxEnabled]);
 
+  // Loudness-matching trim
+  useEffect(() => {
+    const ctx = audioContextRef.current;
+    if (trimRef.current && ctx) {
+      trimRef.current.gain.setTargetAtTime(Math.pow(10, volumeTrimDb / 20), ctx.currentTime, 0.05);
+    }
+  }, [volumeTrimDb]);
+
+  // Release the AudioContext when the player unmounts
+  useEffect(() => {
+    return () => {
+      audioContextRef.current?.close().catch(() => {});
+      audioContextRef.current = null;
+    };
+  }, []);
+
   // Setup Visualizer & Audio Graph
   const initAudioSystem = () => {
     if (audioContextRef.current) return;
@@ -75,6 +96,10 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     analyser.fftSize = 2048;
     analyserRef.current = analyser;
 
+    const trim = ctx.createGain();
+    trim.gain.value = Math.pow(10, volumeTrimDb / 20);
+    trimRef.current = trim;
+
     if (audioRef.current) {
       const source = ctx.createMediaElementSource(audioRef.current);
       sourceRef.current = source;
@@ -84,12 +109,13 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     }
   };
 
-  const connectGraph = (
+  const connectGraph = async (
     ctx: AudioContext, 
     source: MediaElementAudioSourceNode, 
     analyser: AnalyserNode,
     enableFx: boolean
-  ) => {
+  ): Promise<void> => {
+    const myId = fxRequestRef.current;
     // Disconnect everything first
     try { source.disconnect(); } catch (e) {}
     if (graphRef.current) {
@@ -99,20 +125,24 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     if (enableFx && masteringParams) {
       // WET PATH: Source -> FX Graph -> Analyser -> Destination
       if (!graphRef.current) {
-        graphRef.current = createMasteringGraph(ctx, masteringParams);
+        const graph = await createMasteringGraph(ctx, masteringParams);
+        // A newer toggle superseded this one while the graph was being built
+        if (myId !== fxRequestRef.current) return;
+        if (!graphRef.current) graphRef.current = graph;
       } else {
         // Ensure params are up to date when switching on
         graphRef.current.updateParams(masteringParams);
       }
       
-      source.connect(graphRef.current.input);
-      graphRef.current.output.connect(analyser);
+      source.connect(graphRef.current!.input);
+      graphRef.current!.output.connect(analyser);
     } else {
       // DRY PATH: Source -> Analyser -> Destination
       source.connect(analyser);
     }
 
-    analyser.connect(ctx.destination);
+    analyser.connect(trimRef.current ?? ctx.destination);
+    if (trimRef.current) trimRef.current.connect(ctx.destination);
   };
 
   // Toggle FX Handler
@@ -124,7 +154,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     setIsFxEnabled(newFxState);
 
     if (audioContextRef.current && sourceRef.current && analyserRef.current) {
-      connectGraph(audioContextRef.current, sourceRef.current, analyserRef.current, newFxState);
+      fxRequestRef.current++;
+      await connectGraph(audioContextRef.current, sourceRef.current, analyserRef.current, newFxState);
     }
   };
 

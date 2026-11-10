@@ -1,5 +1,5 @@
 import React from 'react';
-import { MasteringParams } from '../types';
+import { MasteringParams, DEFAULT_OUTPUT, OutputParams, BitDepth } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ControlPanelProps {
@@ -67,6 +67,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, disabled 
     });
   };
 
+  const output: OutputParams = params.output ?? DEFAULT_OUTPUT;
+  const updateOutput = (patch: Partial<OutputParams>) => {
+    onChange({ ...params, output: { ...output, ...patch } });
+  };
+  const targetOn = output.targetLufs !== null;
+
   return (
     <div className="w-full glass-panel rounded-3xl p-8 mt-8 border border-gray-700/50">
       <div className="flex items-center justify-between mb-8">
@@ -82,6 +88,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, disabled 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Equalizer Section */}
         <ControlModule title={t('controls.eq')}>
+          <Slider
+            label={t('controls.lowcut')}
+            value={params.lowCut ?? 0}
+            min={0} max={200} step={5} unit="Hz"
+            onChange={(v) => onChange({ ...params, lowCut: v })}
+            disabled={disabled}
+          />
           <Slider 
             label="Low Shelf (100Hz)" 
             value={params.eq.lowGain} 
@@ -137,6 +150,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, disabled 
               disabled={disabled}
             />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Slider
+              label={t('controls.knee')}
+              value={params.compressor.knee ?? 30}
+              min={0} max={40} step={1} unit="dB"
+              onChange={(v) => updateComp('knee', v)}
+              disabled={disabled}
+            />
+            <Slider
+              label={t('controls.makeup')}
+              value={params.compressor.makeup ?? 0}
+              min={0} max={12} step={0.5} unit="dB"
+              onChange={(v) => updateComp('makeup', v)}
+              disabled={disabled}
+            />
+          </div>
         </ControlModule>
 
         {/* Imaging Section */}
@@ -165,6 +194,67 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, disabled 
                {t('controls.imager.desc')}
              </p>
           </div>
+        </ControlModule>
+      </div>
+
+      {/* Output / Limiter Section */}
+      <div className="mt-6">
+        <ControlModule title={t('controls.output')}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Slider
+              label={t('controls.out_gain')}
+              value={output.gain}
+              min={-12} max={24} step={0.5} unit="dB"
+              onChange={(v) => updateOutput({ gain: v })}
+              disabled={disabled || targetOn}
+            />
+            <Slider
+              label={t('controls.ceiling')}
+              value={output.ceiling}
+              min={-6} max={0} step={0.1} unit="dB"
+              onChange={(v) => updateOutput({ ceiling: v })}
+              disabled={disabled}
+            />
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-end">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t('controls.target')}</span>
+                <label className="flex items-center gap-2 text-[10px] font-mono text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={targetOn}
+                    disabled={disabled}
+                    onChange={(e) => updateOutput({ targetLufs: e.target.checked ? -14 : null })}
+                  />
+                  AUTO
+                </label>
+              </div>
+              <select
+                value={output.targetLufs ?? -14}
+                disabled={disabled || !targetOn}
+                onChange={(e) => updateOutput({ targetLufs: parseFloat(e.target.value) })}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono text-gray-200 disabled:opacity-40"
+              >
+                <option value={-16}>-16 LUFS ({t('controls.target.dynamic')})</option>
+                <option value={-14}>-14 LUFS (Spotify / YouTube)</option>
+                <option value={-11}>-11 LUFS ({t('controls.target.loud')})</option>
+                <option value={-9}>-9 LUFS ({t('controls.target.club')})</option>
+              </select>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t('controls.bitdepth')}</span>
+                <select
+                  value={output.bitDepth}
+                  disabled={disabled}
+                  onChange={(e) => updateOutput({ bitDepth: parseInt(e.target.value, 10) as BitDepth })}
+                  className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-200"
+                >
+                  <option value={16}>16-bit (dither)</option>
+                  <option value={24}>24-bit</option>
+                  <option value={32}>32-bit float</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-500 leading-relaxed">{t('controls.output.desc')}</p>
         </ControlModule>
       </div>
     </div>

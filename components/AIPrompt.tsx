@@ -5,9 +5,11 @@ interface AIPromptProps {
   onGenerate: (prompt: string) => Promise<void>;
   isLoading: boolean;
   disabled?: boolean;
+  hasKey: boolean;
+  onOpenKeySettings: () => void;
 }
 
-const AIPrompt: React.FC<AIPromptProps> = ({ onGenerate, isLoading, disabled }) => {
+const AIPrompt: React.FC<AIPromptProps> = ({ onGenerate, isLoading, disabled, hasKey, onOpenKeySettings }) => {
   const { t } = useLanguage();
   const [prompt, setPrompt] = useState('');
 
@@ -25,9 +27,21 @@ const AIPrompt: React.FC<AIPromptProps> = ({ onGenerate, isLoading, disabled }) 
         <h3 className="text-lg font-bold text-white flex items-center gap-2 tracking-tight">
           {t('ai.title')}
           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-            GEMINI_PRO
+            GEMINI
           </span>
         </h3>
+        <button
+          type="button"
+          onClick={onOpenKeySettings}
+          className={`ml-auto flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-colors ${
+            hasKey
+              ? 'text-green-400 border-green-500/30 bg-green-500/10 hover:bg-green-500/20'
+              : 'text-amber-300 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
+          }`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${hasKey ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`}></span>
+          {hasKey ? t('key.btn_set') : t('key.btn_unset')}
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="relative group perspective-500">
